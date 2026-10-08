@@ -27,7 +27,7 @@ pool.connect((err) => {
     }
 });
 
-// Khởi tạo các bảng dữ liệu nếu chưa tồn tại
+// Khởi tạo và đồng bộ cấu trúc bảng dữ liệu (đảm bảo tự thêm cột nếu bảng đã tồn tại)
 const initDatabase = async () => {
     try {
         await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -109,17 +109,20 @@ const initDatabase = async () => {
             date TEXT
         )`);
 
-        // Thêm dữ liệu mặc định nếu bảng users trống[cite: 4]
+        // Đảm bảo luôn có dòng cấu hình mặc định (id = 1) trong bảng settings
+        const settingsCheck = await pool.query(`SELECT COUNT(*) as count FROM settings`);
+        if (settingsCheck.rows[0] && parseInt(settingsCheck.rows[0].count) === 0) {
+            await pool.query(`INSERT INTO settings (id, name, logo, address, phone, qr_code, banners, promo_text, promo_discount) VALUES (1, 'Coffee Demo', '', '123 Đường Trần Hưng Đạo', '0909123456', 'https://api.vietqr.io/image/970422-123456789-n5398FP.jpg', '[]', '', 0)`);
+        }
+
+        // Thêm tài khoản mặc định nếu bảng users trống[cite: 4]
         const userCountRes = await pool.query(`SELECT COUNT(*) as count FROM users`);
         if (userCountRes.rows[0] && parseInt(userCountRes.rows[0].count) === 0) {
             await pool.query(`INSERT INTO users (username, password, role) VALUES ('admin', '123456', 'admin')`);
             await pool.query(`INSERT INTO users (username, password, role) VALUES ('nhanvien', '123456', 'staff')`);
-            await pool.query(`INSERT INTO settings (name, logo, address, phone, qr_code, banners, promo_text, promo_discount) VALUES ('Karaoke KALI', '', '123 Đường Karaoke, Cà Mau', '0909123456', 'https://api.vietqr.io/image/970422-123456789-n5398FP.jpg', '["https://images.unsplash.com/photo-1516450360452-9312f5e86fc7"]', 'Giảm giá 10% giờ hát cho mọi khách hàng!', 10)`);
-            await pool.query(`INSERT INTO rooms (room_name, price_per_hour, status) VALUES ('Phòng 1', 150000, 'Trống')`);
-            await pool.query(`INSERT INTO rooms (room_name, price_per_hour, status) VALUES ('Phòng 2', 150000, 'Trống')`);
-            await pool.query(`INSERT INTO rooms (room_name, price_per_hour, status) VALUES ('Phòng Vip 2', 300000, 'Trống')`);
         }
-        console.log('Khởi tạo cấu trúc CSDL hoàn tất.');
+
+        console.log('Khởi tạo và đồng bộ CSDL hoàn tất.');
     } catch (err) {
         console.error('Lỗi khởi tạo CSDL:', err);
     }
@@ -181,10 +184,10 @@ app.delete('/api/users/:id', async (req, res) => {
     }
 });
 
-// --- API Settings ---
+// --- API Settings (Đã fix dùng Upsert để luôn lưu thành công) ---
 app.get('/api/settings', async (req, res) => {
     try {
-        const result = await pool.query(`SELECT * FROM settings LIMIT 1`);
+        const result = await pool.query(`SELECT * FROM settings ORDER BY id ASC LIMIT 1`);
         res.json(result.rows[0] || {});
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -194,8 +197,19 @@ app.get('/api/settings', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
     const { name, logo, address, phone, qr_code, banners, promo_text, promo_discount } = req.body;
     try {
-        await pool.query(`UPDATE settings SET name = $1, logo = $2, address = $3, phone = $4, qr_code = $5, banners = $6, promo_text = $7, promo_discount = $8 WHERE id = 1`, 
-            [name, logo, address, phone, qr_code, JSON.stringify(banners || []), promo_text || '', promo_discount || 0]);
+        await pool.query(`
+            INSERT INTO settings (id, name, logo, address, phone, qr_code, banners, promo_text, promo_discount) 
+            VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (id) DO UPDATE SET 
+                name = EXCLUDED.name, 
+                logo = EXCLUDED.logo, 
+                address = EXCLUDED.address, 
+                phone = EXCLUDED.phone, 
+                qr_code = EXCLUDED.qr_code, 
+                banners = EXCLUDED.banners, 
+                promo_text = EXCLUDED.promo_text, 
+                promo_discount = EXCLUDED.promo_discount
+        `, [name, logo, address, phone, qr_code, JSON.stringify(banners || []), promo_text || '', Number(promo_discount) || 0]);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -205,7 +219,7 @@ app.post('/api/settings', async (req, res) => {
 // --- API Rooms ---
 app.get('/api/rooms', async (req, res) => {
     try {
-        const result = await pool.query(`SELECT * FROM rooms`);
+        const result = await pool.query(`SELECT * FROM rooms ORDER BY id ASC`);
         const now = new Date();
         const updatedRows = (result.rows || []).map(r => {
             if (r.start_time) {
@@ -410,7 +424,7 @@ app.get('/api/reports/bills-detail', async (req, res) => {
 // --- API Menu ---
 app.get('/api/menu', async (req, res) => {
     try {
-        const result = await pool.query(`SELECT * FROM menu`);
+        const result = await pool.query(`SELECT * FROM menu ORDER BY id ASC`);
         res.json(result.rows || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -423,10 +437,10 @@ app.post('/api/menu/save', async (req, res) => {
     try {
         if(editId > 0) {
             await pool.query(`UPDATE menu SET item_name = $1, category = $2, unit = $3, import_price = $4, price = $5 WHERE id = $6`, 
-                [item_name, category, unit, import_price || 0, price, editId]);
+                [item_name, category, unit, Number(import_price) || 0, Number(price) || 0, editId]);
         } else {
             await pool.query(`INSERT INTO menu (item_name, category, unit, import_price, price) VALUES ($1, $2, $3, $4, $5)`, 
-                [item_name, category, unit, import_price || 0, price]);
+                [item_name, category, unit, Number(import_price) || 0, Number(price) || 0]);
         }
         res.json({ success: true });
     } catch (err) {
@@ -470,7 +484,7 @@ app.post('/api/orders', async (req, res) => {
 // --- API Inventory ---
 app.get('/api/inventory', async (req, res) => {
     try {
-        const result = await pool.query(`SELECT * FROM inventory`);
+        const result = await pool.query(`SELECT * FROM inventory ORDER BY id ASC`);
         res.json(result.rows || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -482,18 +496,21 @@ app.post('/api/inventory/save', async (req, res) => {
     const editId = Number(id);
     const currentDate = new Date().toISOString().split('T')[0];
     try {
+        const qty = Number(quantity) || 0;
+        const impPrice = Number(import_price) || 0;
+
         if (editId > 0) {
             await pool.query(`UPDATE inventory SET item_name = $1, category = $2, quantity = $3, unit = $4, import_price = $5 WHERE id = $6`,
-                [item_name, category, quantity, unit, import_price, editId]);
+                [item_name, category, qty, unit, impPrice, editId]);
         } else {
             await pool.query(`INSERT INTO inventory (item_name, category, quantity, unit, import_price, import_date) VALUES ($1, $2, $3, $4, $5, $6)`, 
-                [item_name, category, quantity, unit, import_price, currentDate]);
+                [item_name, category, qty, unit, impPrice, currentDate]);
             
             const menuRes = await pool.query(`SELECT * FROM menu WHERE item_name = $1`, [item_name]);
             if (menuRes.rows.length === 0) {
-                const sellPrice = import_price * 1.3;
+                const sellPrice = impPrice * 1.3;
                 await pool.query(`INSERT INTO menu (item_name, category, unit, import_price, price) VALUES ($1, $2, $3, $4, $5)`, 
-                    [item_name, category, unit, import_price, sellPrice]);
+                    [item_name, category, unit, impPrice, sellPrice]);
             }
         }
         res.json({ success: true });
@@ -514,7 +531,7 @@ app.delete('/api/inventory/:id', async (req, res) => {
 // --- API Expenses ---
 app.get('/api/expenses', async (req, res) => {
     try {
-        const result = await pool.query(`SELECT * FROM expenses`);
+        const result = await pool.query(`SELECT * FROM expenses ORDER BY id ASC`);
         res.json(result.rows || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -525,7 +542,7 @@ app.post('/api/expenses', async (req, res) => {
     const { category, amount, note, date } = req.body;
     const expenseDate = date || new Date().toISOString().split('T')[0];
     try {
-        await pool.query(`INSERT INTO expenses (category, amount, note, date) VALUES ($1, $2, $3, $4)`, [category, amount, note, expenseDate]);
+        await pool.query(`INSERT INTO expenses (category, amount, note, date) VALUES ($1, $2, $3, $4)`, [category, Number(amount) || 0, note, expenseDate]);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
