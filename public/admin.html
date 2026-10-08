@@ -659,7 +659,7 @@
             document.getElementById('i-form-title').innerText = 'Nhập / Cập Nhật Kho';
             document.getElementById('i-cancel').style.display = 'none';
         }
-        async function deleteInventory(id) {
+        async        async function deleteInventory(id) {
             if(confirm('Xóa hàng trong kho này?')) { await fetch(`/api/inventory/${id}`, { method: 'DELETE' }); loadAll(); }
         }
 
