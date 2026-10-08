@@ -151,12 +151,13 @@ app.get('/api/users', async (req, res) => {
 
 app.post('/api/users/save', async (req, res) => {
     const { id, username, password, role } = req.body;
+    const editId = Number(id);
     try {
-        if (id) {
+        if (editId > 0) {
             if (password) {
-                await pool.query(`UPDATE users SET username = $1, password = $2, role = $3 WHERE id = $4`, [username, password, role, id]);
+                await pool.query(`UPDATE users SET username = $1, password = $2, role = $3 WHERE id = $4`, [username, password, role, editId]);
             } else {
-                await pool.query(`UPDATE users SET username = $1, role = $2 WHERE id = $3`, [username, role, id]);
+                await pool.query(`UPDATE users SET username = $1, role = $2 WHERE id = $3`, [username, role, editId]);
             }
         } else {
             await pool.query(`INSERT INTO users (username, password, role) VALUES ($1, $2, $3)`, [username, password || '123456', role || 'staff']);
@@ -224,9 +225,10 @@ app.get('/api/rooms', async (req, res) => {
 
 app.post('/api/rooms/save', async (req, res) => {
     const { id, room_name, price_per_hour } = req.body;
+    const editId = Number(id);
     try {
-        if (id) {
-            await pool.query(`UPDATE rooms SET room_name = $1, price_per_hour = $2 WHERE id = $3`, [room_name, price_per_hour, id]);
+        if (editId > 0) {
+            await pool.query(`UPDATE rooms SET room_name = $1, price_per_hour = $2 WHERE id = $3`, [room_name, price_per_hour, editId]);
         } else {
             await pool.query(`INSERT INTO rooms (room_name, price_per_hour, status) VALUES ($1, $2, 'Trống')`, [room_name, price_per_hour]);
         }
@@ -417,10 +419,11 @@ app.get('/api/menu', async (req, res) => {
 
 app.post('/api/menu/save', async (req, res) => {
     const { id, item_name, category, unit, import_price, price } = req.body;
+    const editId = Number(id);
     try {
-        if(id) {
+        if(editId > 0) {
             await pool.query(`UPDATE menu SET item_name = $1, category = $2, unit = $3, import_price = $4, price = $5 WHERE id = $6`, 
-                [item_name, category, unit, import_price || 0, price, id]);
+                [item_name, category, unit, import_price || 0, price, editId]);
         } else {
             await pool.query(`INSERT INTO menu (item_name, category, unit, import_price, price) VALUES ($1, $2, $3, $4, $5)`, 
                 [item_name, category, unit, import_price || 0, price]);
@@ -476,11 +479,12 @@ app.get('/api/inventory', async (req, res) => {
 
 app.post('/api/inventory/save', async (req, res) => {
     const { id, item_name, category, quantity, unit, import_price } = req.body;
+    const editId = Number(id);
     const currentDate = new Date().toISOString().split('T')[0];
     try {
-        if (id) {
+        if (editId > 0) {
             await pool.query(`UPDATE inventory SET item_name = $1, category = $2, quantity = $3, unit = $4, import_price = $5 WHERE id = $6`,
-                [item_name, category, quantity, unit, import_price, id]);
+                [item_name, category, quantity, unit, import_price, editId]);
         } else {
             await pool.query(`INSERT INTO inventory (item_name, category, quantity, unit, import_price, import_date) VALUES ($1, $2, $3, $4, $5, $6)`, 
                 [item_name, category, quantity, unit, import_price, currentDate]);
