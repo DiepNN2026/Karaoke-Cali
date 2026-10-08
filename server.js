@@ -10,12 +10,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Kết nối tự động nhận từ biến môi trường DATABASE_URL trên Render
+// Kết nối tự động nhận từ biến môi trường DATABASE_URL trên Render (đã ép IPv4)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
         rejectUnauthorized: false // Bắt buộc khi kết nối Supabase từ bên ngoài
-    }
+    },
+    family: 4 // Ép buộc sử dụng IPv4 để tránh lỗi ENETUNREACH trên Render
 });
 
 pool.connect((err) => {
