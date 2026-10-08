@@ -10,13 +10,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Kết nối tự động nhận từ biến môi trường DATABASE_URL trên Render (đã ép IPv4)
+// Kết nối tự động nhận từ biến môi trường DATABASE_URL trên Render (đã ép IPv4)[cite: 4]
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // Bắt buộc khi kết nối Supabase từ bên ngoài
+        rejectUnauthorized: false // Bắt buộc khi kết nối Supabase từ bên ngoài[cite: 4]
     },
-    family: 4 // Ép buộc sử dụng IPv4 để tránh lỗi ENETUNREACH trên Render
+    family: 4 // Ép buộc sử dụng IPv4 để tránh lỗi ENETUNREACH trên Render[cite: 4]
 });
 
 pool.connect((err) => {
@@ -109,7 +109,7 @@ const initDatabase = async () => {
             date TEXT
         )`);
 
-        // Thêm dữ liệu mặc định nếu bảng users trống
+        // Thêm dữ liệu mặc định nếu bảng users trống[cite: 4]
         const userCountRes = await pool.query(`SELECT COUNT(*) as count FROM users`);
         if (userCountRes.rows[0] && parseInt(userCountRes.rows[0].count) === 0) {
             await pool.query(`INSERT INTO users (username, password, role) VALUES ('admin', '123456', 'admin')`);
