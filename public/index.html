@@ -125,17 +125,17 @@
                     <div class="mb-3"><label class="form-label">SĐT:</label><input type="text" id="c-phone" class="form-control" placeholder="Nhập số điện thoại"></div>
                     
                     <div id="slot-container" class="mb-3" style="display:none;">
-                        <label class="form-label fw-bold">Chọn khung giờ:</label>
+                        <label class="form-label fw-bold">Chọn khung giờ (có thể chọn nhiều múi giờ liên tục):</label>
                         <div id="slot-list" class="d-flex flex-wrap gap-2">
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '09:00 - 10:00')">09:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '10:00 - 11:00')">10:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '11:00 - 12:00')">11:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '13:00 - 14:00')">13:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '14:00 - 15:00')">14:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '15:00 - 16:00')">15:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '18:00 - 19:00')">18:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '19:00 - 20:00')">19:00</button>
-                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="selectSlot(this, '20:00 - 21:00')">20:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '09:00 - 10:00')">09:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '10:00 - 11:00')">10:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '11:00 - 12:00')">11:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '13:00 - 14:00')">13:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '14:00 - 15:00')">14:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '15:00 - 16:00')">15:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '18:00 - 19:00')">18:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '19:00 - 20:00')">19:00</button>
+                            <button type="button" class="btn btn-outline-primary slot-btn" onclick="toggleSlot(this, '20:00 - 21:00')">20:00</button>
                         </div>
                     </div>
                 </div>
@@ -164,8 +164,9 @@
                     </div>
                     <ul class="list-group mb-3" id="order-list"></ul>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn btn-warning w-100" id="checkout-btn" onclick="checkoutRoom()">Tính Tiền & In Bill</button>
+                <div class="modal-footer d-flex gap-2">
+                    <button class="btn btn-warning flex-grow-1" id="checkout-btn" onclick="checkoutRoom()">Tính Tiền & In Bill</button>
+                    <button class="btn btn-danger" onclick="cancelBooking()">Hủy Giờ Đặt</button>
                 </div>
             </div>
         </div>
@@ -220,7 +221,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let menuData = [], selectedSlotValue = '';
+        let menuData = [], selectedSlotsArray = [];
 
         async function init() {
             const resSet = await fetch('/api/settings');
@@ -313,6 +314,11 @@
                 document.getElementById('b-type').value = 'counter';
                 document.getElementById('c-name').value = '';
                 document.getElementById('c-phone').value = '';
+                selectedSlotsArray = [];
+                document.querySelectorAll('.slot-btn').forEach(b => {
+                    b.classList.remove('btn-primary', 'text-white');
+                    b.classList.add('btn-outline-primary');
+                });
                 new bootstrap.Modal(document.getElementById('bookModal')).show();
             } else {
                 document.getElementById('a-room-id').value = room.id;
@@ -329,12 +335,18 @@
             document.getElementById('slot-container').style.display = type === 'online' ? 'block' : 'none';
         }
 
-        function selectSlot(btn, timeStr) {
-            document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('btn-primary', 'text-white'));
-            document.querySelectorAll('.slot-btn').forEach(b => b.classList.add('btn-outline-primary'));
-            btn.classList.remove('btn-outline-primary');
-            btn.classList.add('btn-primary', 'text-white');
-            selectedSlotValue = timeStr;
+        // Hỗ trợ bật/tắt chọn nhiều múi giờ liên tục
+        function toggleSlot(btn, timeStr) {
+            const index = selectedSlotsArray.indexOf(timeStr);
+            if (index > -1) {
+                selectedSlotsArray.splice(index, 1);
+                btn.classList.remove('btn-primary', 'text-white');
+                btn.classList.add('btn-outline-primary');
+            } else {
+                selectedSlotsArray.push(timeStr);
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary', 'text-white');
+            }
         }
 
         async function loadOrders(roomId) {
@@ -358,12 +370,52 @@
             const customer_name = document.getElementById('c-name').value;
             const customer_phone = document.getElementById('c-phone').value;
             
-            await fetch('/api/rooms/book', { 
+            // Nếu đặt online, lấy thời gian bắt đầu từ slot đầu tiên được chọn
+            let start_time_custom = null;
+            if(booking_type === 'online' && selectedSlotsArray.length > 0) {
+                selectedSlotsArray.sort();
+                const firstSlotTimeStr = selectedSlotsArray[0].split(' - ')[0]; // Lấy giờ mở đầu ví dụ "09:00"
+                const today = new Date().toISOString().split('T')[0];
+                start_time_custom = `${today}T${firstSlotTimeStr}:00.000Z`;
+            }
+
+            const res = await fetch('/api/rooms/book', { 
                 method: 'POST', 
                 headers: {'Content-Type': 'application/json'}, 
-                body: JSON.stringify({ room_id, booking_type, customer_name, customer_phone, selected_slot: selectedSlotValue }) 
+                body: JSON.stringify({ 
+                    room_id, 
+                    booking_type, 
+                    customer_name, 
+                    customer_phone, 
+                    selected_slots: selectedSlotsArray,
+                    start_time_custom
+                }) 
             });
-            location.reload();
+            const data = await res.json();
+            if(data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Có lỗi xảy ra');
+            }
+        }
+
+        // Chức năng hủy giờ đặt dành cho nhân viên/admin
+        async function cancelBooking() {
+            if(confirm('Bạn có chắc chắn muốn hủy giờ đặt/lịch phòng này không?')) {
+                const room_id = document.getElementById('a-room-id').value;
+                const res = await fetch('/api/rooms/cancel-booking', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ room_id })
+                });
+                const data = await res.json();
+                if(data.success) {
+                    alert('Đã hủy giờ đặt phòng thành công!');
+                    location.reload();
+                } else {
+                    alert(data.error || 'Không thể hủy lịch.');
+                }
+            }
         }
 
         async function checkoutRoom() {
