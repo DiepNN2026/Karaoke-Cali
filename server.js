@@ -10,13 +10,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Kết nối tự động nhận từ biến môi trường DATABASE_URL trên Render (đã ép IPv4)[cite: 4]
+// Kết nối tự động nhận từ biến môi trường DATABASE_URL trên Render (đã ép IPv4)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // Bắt buộc khi kết nối Supabase từ bên ngoài[cite: 4]
+        rejectUnauthorized: false // Bắt buộc khi kết nối Supabase từ bên ngoài
     },
-    family: 4 // Ép buộc sử dụng IPv4 để tránh lỗi ENETUNREACH trên Render[cite: 4]
+    family: 4 // Ép buộc sử dụng IPv4 để tránh lỗi ENETUNREACH trên Render
 });
 
 pool.connect((err) => {
@@ -115,7 +115,7 @@ const initDatabase = async () => {
             await pool.query(`INSERT INTO settings (id, name, logo, address, phone, qr_code, banners, promo_text, promo_discount) VALUES (1, 'Coffee Demo', '', '123 Đường Trần Hưng Đạo', '0909123456', 'https://api.vietqr.io/image/970422-123456789-n5398FP.jpg', '[]', '', 0)`);
         }
 
-        // Thêm tài khoản mặc định nếu bảng users trống[cite: 4]
+        // Thêm tài khoản mặc định nếu bảng users trống
         const userCountRes = await pool.query(`SELECT COUNT(*) as count FROM users`);
         if (userCountRes.rows[0] && parseInt(userCountRes.rows[0].count) === 0) {
             await pool.query(`INSERT INTO users (username, password, role) VALUES ('admin', '123456', 'admin')`);
@@ -184,7 +184,7 @@ app.delete('/api/users/:id', async (req, res) => {
     }
 });
 
-// --- API Settings (Đã fix dùng Upsert để luôn lưu thành công) ---
+// --- API Settings ---
 app.get('/api/settings', async (req, res) => {
     try {
         const result = await pool.query(`SELECT * FROM settings ORDER BY id ASC LIMIT 1`);
@@ -364,12 +364,12 @@ app.post('/api/rooms/checkout', async (req, res) => {
     }
 });
 
-// --- API Reports & Details ---
+// --- API Reports & Details (Đã fix aliases viết hoa đúng chuẩn để không lệch dữ liệu) ---
 app.get('/api/reports/revenue', async (req, res) => {
     const { start_date, end_date } = req.query;
     try {
-        let billQuery = `SELECT SUM(grand_total) as totalRevenue FROM bills`;
-        let expQuery = `SELECT category, SUM(amount) as totalExp FROM expenses`;
+        let billQuery = `SELECT SUM(grand_total) AS "totalRevenue" FROM bills`;
+        let expQuery = `SELECT category, SUM(amount) AS "totalExp" FROM expenses`;
         let params = [];
 
         if (start_date && end_date) {
@@ -380,11 +380,11 @@ app.get('/api/reports/revenue', async (req, res) => {
         expQuery += ` GROUP BY category`;
 
         const billRes = await pool.query(billQuery, params);
-        const invRes = await pool.query(`SELECT SUM(quantity * import_price) as totalInventoryValue FROM inventory`);
+        const invRes = await pool.query(`SELECT SUM(quantity * import_price) AS "totalInventoryValue" FROM inventory`);
         const expRes = await pool.query(expQuery, params);
 
-        const totalRevenue = billRes.rows[0]?.totalrevenue || 0;
-        const totalImport = invRes.rows[0]?.totalinventoryvalue || 0;
+        const totalRevenue = Number(billRes.rows[0]?.totalRevenue) || 0;
+        const totalImport = Number(invRes.rows[0]?.totalInventoryValue) || 0;
         const grossProfit = totalRevenue - totalImport;
 
         let expenses = {
@@ -393,8 +393,8 @@ app.get('/api/reports/revenue', async (req, res) => {
         };
         let totalExpense = 0;
         (expRes.rows || []).forEach(e => {
-            expenses[e.category] = Number(e.totalexp) || 0;
-            totalExpense += Number(e.totalexp) || 0;
+            expenses[e.category] = Number(e.totalExp) || 0;
+            totalExpense += Number(e.totalExp) || 0;
         });
 
         const netProfit = grossProfit - totalExpense;
