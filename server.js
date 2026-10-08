@@ -211,8 +211,10 @@ app.delete('/api/rooms/:id', (req, res) => {
     db.run(`DELETE FROM rooms WHERE id = ?`, [req.params.id], () => res.json({ success: true }));
 });
 
+// Đặt phòng (Hỗ trợ khách tại quầy hoặc khách chọn nhiều múi giờ liên tục online)
 app.post('/api/rooms/book', (req, res) => {
-    const { room_id, booking_type, customer_name, customer_phone, selected_slot } = req.body;
+    const { room_id, booking_type, customer_name, customer_phone, selected_slots, start_time_custom } = req.body;
+    
     if (booking_type === 'counter') {
         const start_time = new Date().toISOString();
         db.run(`UPDATE rooms SET status = 'Đang hát', booking_type = 'counter', customer_name = ?, customer_phone = ?, start_time = ? WHERE id = ?`,
@@ -221,17 +223,34 @@ app.post('/api/rooms/book', (req, res) => {
                 res.json({ success: true });
             });
     } else {
+        // Online booking: hỗ trợ nhiều múi giờ liên tục (selected_slots là mảng các giờ bắt đầu)
         db.get(`SELECT booked_slots FROM rooms WHERE id = ?`, [room_id], (err, row) => {
-            let slots = [];
-            try { slots = JSON.parse(row?.booked_slots || '[]'); } catch(e) {}
-            if (selected_slot && !slots.includes(selected_slot)) slots.push(selected_slot);
+            let existingSlots = [];
+            try { existingSlots = JSON.parse(row?.booked_slots || '[]'); } catch(e) {}
+            
+            const newSlots = Array.isArray(selected_slots) ? selected_slots : [selected_slots];
+            // Gộp và lọc trùng các múi giờ
+            const mergedSlots = Array.from(new Set([...existingSlots, ...newSlots])).sort();
+            
+            // Lấy giờ bắt đầu sớm nhất trong các múi giờ liên tục làm mốc tính giờ nếu khách đến/hát
+            const firstSlotTime = start_time_custom || (mergedSlots.length > 0 ? mergedSlots[0] : new Date().toISOString());
+
             db.run(`UPDATE rooms SET status = 'Đang hát', booking_type = 'online', customer_name = ?, customer_phone = ?, booked_slots = ?, start_time = ? WHERE id = ?`, 
-                [customer_name || 'Khách online', customer_phone || '', JSON.stringify(slots), new Date().toISOString(), room_id], (err) => {
+                [customer_name || 'Khách online', customer_phone || '', JSON.stringify(mergedSlots), firstSlotTime, room_id], (err) => {
                     if (err) return res.status(500).json({ error: err.message });
                     res.json({ success: true });
                 });
         });
     }
+});
+
+// API Hủy giờ đặt online / tại quầy (Cho phép nhân viên và admin thực hiện)
+app.post('/api/rooms/cancel-booking', (req, res) => {
+    const { room_id } = req.body;
+    db.run(`UPDATE rooms SET status = 'Trống', booking_type = NULL, customer_name = NULL, customer_phone = NULL, customer_cccd = NULL, start_time = NULL, booked_slots = '[]' WHERE id = ?`, [room_id], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: 'Đã hủy giờ đặt phòng thành công!' });
+    });
 });
 
 app.post('/api/rooms/checkout', (req, res) => {
@@ -240,6 +259,7 @@ app.post('/api/rooms/checkout', (req, res) => {
         db.get(`SELECT * FROM rooms WHERE id = ?`, [room_id], (err, room) => {
             if (!room || room.status === 'Trống') return res.status(400).json({ error: 'Phòng đang trống!' });
 
+            // Thời gian bắt đầu tính tiền: Lấy từ start_time (đã quy định từ giờ đặt online sớm nhất hoặc giờ tại quầy)
             const startTime = room.start_time ? new Date(room.start_time) : new Date();
             const now = new Date();
             const hours = Math.max(0.2, (now - startTime) / (1000 * 60 * 60));
