@@ -335,7 +335,6 @@
             document.getElementById('slot-container').style.display = type === 'online' ? 'block' : 'none';
         }
 
-        // Hỗ trợ bật/tắt chọn nhiều múi giờ liên tục
         function toggleSlot(btn, timeStr) {
             const index = selectedSlotsArray.indexOf(timeStr);
             if (index > -1) {
@@ -370,11 +369,10 @@
             const customer_name = document.getElementById('c-name').value;
             const customer_phone = document.getElementById('c-phone').value;
             
-            // Nếu đặt online, lấy thời gian bắt đầu từ slot đầu tiên được chọn
             let start_time_custom = null;
             if(booking_type === 'online' && selectedSlotsArray.length > 0) {
                 selectedSlotsArray.sort();
-                const firstSlotTimeStr = selectedSlotsArray[0].split(' - ')[0]; // Lấy giờ mở đầu ví dụ "09:00"
+                const firstSlotTimeStr = selectedSlotsArray[0].split(' - ')[0];
                 const today = new Date().toISOString().split('T')[0];
                 start_time_custom = `${today}T${firstSlotTimeStr}:00.000Z`;
             }
@@ -399,7 +397,6 @@
             }
         }
 
-        // Chức năng hủy giờ đặt dành cho nhân viên/admin
         async function cancelBooking() {
             if(confirm('Bạn có chắc chắn muốn hủy giờ đặt/lịch phòng này không?')) {
                 const room_id = document.getElementById('a-room-id').value;
